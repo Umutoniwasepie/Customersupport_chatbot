@@ -1,5 +1,5 @@
-streamlit==1.42.2
-transformers>=4.36.0
-torch==2.5.1
-gdown>=4.6.0
+streamlit
+transformers
+torch
+gdown
 sentencepiece  # Required for T5Tokenizer
