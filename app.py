@@ -3,19 +3,25 @@ from transformers import T5Tokenizer, T5ForConditionalGeneration
 import torch
 import re
 
-# Load the model and tokenizer
-MODEL_NAME= "Umutoniwasepie/final_model"
+# Load the model and tokenizer from Hugging Face
+@st.cache_resource
+def load_model():
+    # Replace with your actual Hugging Face model repository path
+    model_name = "Umutoniwasepie/final_model"  # Update this!
+    tokenizer = T5Tokenizer.from_pretrained(model_name)
+    model = T5ForConditionalGeneration.from_pretrained(model_name)
+    return tokenizer, model
 
-# Load the model and tokenizer
-tokenizer = T5Tokenizer.from_pretrained(MODEL_NAME)
-model = T5ForConditionalGeneration.from_pretrained(MODEL_NAME)
+tokenizer, model = load_model()
 
+# Text normalization function
 def normalize_input(text):
     text = text.lower().strip()
     text = re.sub(r'\s+', ' ', text)
     text = re.sub(r'[^\w\s\?.,!]', '', text)
     return text
 
+# Response capitalization function
 def capitalize_response(response):
     sentences = response.split(". ")
     unique_sentences = []
@@ -24,40 +30,45 @@ def capitalize_response(response):
             unique_sentences.append(s.capitalize())
     return ". ".join(unique_sentences)
 
-def test_query(query):  
-    query_lower = normalize_input(query)  
-    # Prompt the model succinctly  
-    input_text = f"{query_lower}"  # Simpler prompt  
-    input_ids = tokenizer(input_text, return_tensors="pt", truncation=True, padding="max_length", max_length=128).input_ids  
-    with torch.no_grad():  
-        output_ids = model.generate(  
-            input_ids,  
-            max_length=200,  
-            temperature=0.8,  
-            top_k=70,  
-            repetition_penalty=1.5  
-        )  
-    response = tokenizer.decode(output_ids[0], skip_special_tokens=True)  
-
-    # Debugging: Print input and output  
-    print(f"Input: {input_text}")  
-    print(f"Output: {response}")  
-
-    # Check for empty response  
-    if not response.strip():  
-        response = "I'm sorry, I didn't understand that. Could you please rephrase?"  
-    
+# Response generation function
+def generate_response(query):
+    query_lower = normalize_input(query)
+    input_text = f"generate response: Current query: {query_lower}"
+    input_ids = tokenizer(input_text, return_tensors="pt", truncation=True, padding="max_length", max_length=128).input_ids
+    with torch.no_grad():
+        output_ids = model.generate(
+            input_ids,
+            max_length=200,
+            temperature=0.8,
+            top_k=70,
+            repetition_penalty=1.5,
+            do_sample=True
+        )
+    response = tokenizer.decode(output_ids[0], skip_special_tokens=True)
     return capitalize_response(response)
 
 # Streamlit app layout
-st.title("Customer Support Chatbot 🤖")
-st.write("Ask me any customer support-related question!...I do have my limits(I'm still in the learning phace)")
+st.title("Customer Support Chatbot")
 
-user_input = st.text_input("You:", "")
+# Initialize chat history in session state
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-if st.button("Send"):
-    if user_input.strip():
-        response = test_query(user_input)
-        st.write(f"**Bot:** {response}")
-    else:
-        st.warning("Please enter a valid question.")
+# Display chat history
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# User input at the bottom
+user_input = st.chat_input("Type your question here...")
+
+# Handle user input
+if user_input:
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    with st.chat_message("user"):
+        st.markdown(user_input)
+
+    with st.chat_message("assistant"):
+        response = generate_response(user_input)
+        st.markdown(response)
+        st.session_state.messages.append({"role": "assistant", "content": response})
